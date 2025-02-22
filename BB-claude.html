@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>BB Claude Chat</title>
+    <style>
+        /* (Your CSS - no changes) */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-size: 14px;
+        }
+        body {
+            font-family: Söhne, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, Cantarell, "Noto Sans", sans-serif;
+            line-height: 1.6;
+            padding: 10px;
+            max-width: 800px;
+            margin: 0 auto;
+            background: #1A1A1A;
+            color: #ECECEC;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        #headerSection {
+            background: #2A2A2A;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            padding: 15px;
+            flex-shrink: 0;
+        }
+        .status-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .key-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            background: #ccc;
+            margin-right: 5px;
+        }
+        .key-indicator.active {
+            background: #F0A78B;
+        }
+        .reset-link {
+            color: #F0A78B;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+        .api-input-container {
+            margin-top: 10px;
+        }
+        .api-input-container label {
+            display: block;
+            margin-bottom: 5px;
+            color: #ECECEC;
+        }
+        .api-input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #444;
+            border-radius: 6px;
+            margin-top: 5px;
+            background: #2A2A2A;
+            color: #ECECEC;
+        }
+        #mainContainer {
+            background: #2A2A2A;
+            border-radius: 8px;
+            padding: 15px;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+        #messageHistory {
+            flex-grow: 1;
+            overflow-y: auto;
+            border: 1px solid #444;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 10px;
+            min-height: 0;
+            background: #1A1A1A;
+        }
+        .message {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 6px;
+            position: relative;
+            word-wrap: break-word;
+        }
+        .user-message {
+            background: #2A2A2A;
+            margin-left: 20px;
+            color: #ECECEC;
+        }
+        .assistant-message {
+            background: #2A2A2A;
+            margin-right: 20px;
+            color: #ECECEC;
+        }
+        .status-message {
+            background: #333;
+            text-align: center;
+            font-style: italic;
+            color: #888;
+        }
+        #inputSection {
+            flex-shrink: 0;
+            margin-top: auto;
+        }
+        #inputRow {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 5px;
+        }
+        #userInput {
+            flex-grow: 1;
+            padding: 8px;
+            border: 1px solid #444;
+            border-radius: 6px;
+            height: 40px;
+            background: #2A2A2A;
+            color: #ECECEC;
+        }
+        #sendButton {
+            padding: 8px 16px;
+            background: #F0A78B;
+            color: #000;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            min-width: 70px;
+            height: 40px;
+            font-weight: 500;
+        }
+        button:disabled {
+            background: #666;
+            color: #333;
+        }
+        #actionLinks {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px;
+            font-size: 12px;
+        }
+        .action-link {
+            color: #F0A78B;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+        .action-link.delete {
+            color: #F0A78B;
+        }
+        .loading #mainContainer {
+            opacity: 0.6;
+        }
+        #loadingIndicator {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 6px;
+            z-index: 1000;
+        }
+        .loading #loadingIndicator {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div id="headerSection">
+        <div class="status-row">
+            <div>
+                <span class="key-indicator" id="keyIndicator"></span>
+                <span>API Key Status</span>
+            </div>
+            <span class="reset-link" onclick="if(confirm('Reset API keys?')){localStorage.removeItem('bb_claude_chat_apikey_v1'); document.getElementById('apiKeyInput').style.display='block'; document.getElementById('keyIndicator').classList.remove('active');}">Reset Keys</span>
+        </div>
+        <div class="api-input-container">
+            <label>Claude API Key:</label>
+            <input type="password" id="apiKeyInput" class="api-input" placeholder="Enter your Anthropic API key"
+                onchange="if(this.value.trim()){localStorage.setItem('bb_claude_chat_apikey_v1',this.value.trim());this.style.display='none';updateKeyIndicator();}"
+            >
+        </div>
+    </div>
+
+    <div id="mainContainer">
+        <div id="messageHistory"></div>
+        <div id="inputSection">
+            <div id="inputRow">
+                <input type="text" id="userInput" placeholder="Message Claude...">
+                <button id="sendButton" onclick="sendMessage()">Send</button>
+            </div>
+            <div id="actionLinks">
+                <a class="action-link delete" onclick="clearAllMessages()">Clear all messages</a>
+            </div>
+        </div>
+    </div>
+
+    <div id="loadingIndicator">Sending message...</div>
+
+<script>
+// --- All the setup and helper functions remain the same ---
+function updateKeyIndicator() {
+    var hasClaudeKey = !!localStorage.getItem('bb_claude_chat_apikey_v1');
+
+    if(hasClaudeKey) {
+        document.getElementById('keyIndicator').classList.add('active');
+        document.getElementById('apiKeyInput').style.display = 'none';
+    } else {
+        document.getElementById('keyIndicator').classList.remove('active');
+    }
+}
+
+updateKeyIndicator();
+document.getElementById('apiKeyInput').style.display = localStorage.getItem('bb_claude_chat_apikey_v1') ? 'none' : 'block';
+
+var messageHistory = [];
+try {
+    var saved = localStorage.getItem('bb_claude_chat_history_v1');
+    if(saved) {
+        messageHistory = JSON.parse(saved);
+        var historyDiv = document.getElementById('messageHistory');
+        messageHistory.forEach(function(msg) {
+            var div = document.createElement('div');
+            div.className = 'message ' + msg.role + '-message';
+            div.textContent = msg.content;
+            historyDiv.appendChild(div);
+        });
+    }
+} catch(e) {
+    addStatusMessage('Error loading message history');
+    localStorage.removeItem('bb_claude_chat_history_v1');
+    messageHistory = [];
+}
+
+function addStatusMessage(text) {
+    var div = document.createElement('div');
+    div.className = 'message status-message';
+    div.textContent = text;
+    document.getElementById('messageHistory').appendChild(div);
+    scrollToBottom();
+}
+
+function addMessage(role, content) {
+    var div = document.createElement('div');
+    div.className = 'message ' + role + '-message';
+    div.textContent = content;
+    document.getElementById('messageHistory').appendChild(div);
+    scrollToBottom();
+
+    messageHistory.push({role: role, content: content});
+    try {
+        localStorage.setItem('bb_claude_chat_history_v1', JSON.stringify(messageHistory));
+    } catch(e) {
+        addStatusMessage('Error saving messages - clearing old messages');
+        messageHistory = messageHistory.slice(-10);
+        localStorage.setItem('bb_claude_chat_history_v1', JSON.stringify(messageHistory));
+    }
+}
+
+function scrollToBottom() {
+    var historyDiv = document.getElementById('messageHistory');
+    historyDiv.scrollTop = historyDiv.scrollHeight;
+}
+
+function sendMessage() {
+    var userInput = document.getElementById('userInput');
+    var messageText = userInput.value.trim();
+    if (!messageText) return;
+
+    var apiKey = localStorage.getItem('bb_claude_chat_apikey_v1');
+
+    if (!apiKey) {
+        alert('Please enter your Anthropic API key');
+        document.getElementById('apiKeyInput').focus();
+        return;
+    }
+
+    userInput.disabled = true;
+    document.getElementById('sendButton').disabled = true;
+    document.body.classList.add('loading');
+
+    addMessage('user', messageText);
+    userInput.value = '';
+
+    var messages = messageHistory.map(function(msg) {
+        return {
+            role: msg.role,
+            content: msg.content
+        };
+    });
+
+    var data = {
+        model: "claude-3-sonnet-20240229",
+        messages: messages,
+        max_tokens: 4096
+    };
+
+    var targetUrl = 'https://api.anthropic.com/v1/messages'; // Direct URL
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', targetUrl, true); // POST directly to Anthropic
+
+    // Set the Anthropic API headers.
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.setRequestHeader('anthropic-version', '2023-06-01');
+    xhr.setRequestHeader('anthropic-beta', 'messages-2024-01-01');
+    xhr.setRequestHeader('x-api-key', apiKey);
+
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            userInput.disabled = false;
+            document.getElementById('sendButton').disabled = false;
+            document.body.classList.remove('loading');
+
+            if (xhr.status === 200) {
+                try {
+                    var response = JSON.parse(xhr.responseText);
+                    var responseText = response.content[0].text;
+                    addMessage('assistant', responseText);
+                } catch (e) {
+                    addStatusMessage('Error processing response: ' + e.message + ". Response: " + xhr.responseText);
+                }
+            } else {
+                addStatusMessage('Error: ' + xhr.status + ' - ' + xhr.statusText + '. Response: ' + xhr.responseText);
+            }
+            userInput.focus();
+        }
+    };
+
+    xhr.onerror = function() {
+        addStatusMessage('Network error occurred');
+        userInput.disabled = false;
+        document.getElementById('sendButton').disabled = false;
+        document.body.classList.remove('loading');
+        userInput.focus();
+    };
+
+    xhr.ontimeout = function() {
+        addStatusMessage('Request timed out');
+        userInput.disabled = false;
+        document.getElementById('sendButton').disabled = false;
+        document.body.classList.remove('loading');
+        userInput.focus();
+    };
+
+    xhr.send(JSON.stringify(data)); // Send the request body
+}
+
+function clearAllMessages() {
+    if(confirm('Clear all messages?')) {
+        messageHistory = [];
+        localStorage.removeItem('bb_claude_chat_history_v1');
+        document.getElementById('messageHistory').innerHTML = '';
+        addStatusMessage('Messages cleared');
+    }
+}
+
+document.getElementById('userInput').onkeypress = function(e) {
+    if((e.key === 'Enter' || e.keyCode === 13) && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+    }
+};
+</script>
+</body>
+</html>
